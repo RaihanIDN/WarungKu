@@ -1,5 +1,5 @@
 # Aplikasi Kasir (HTML + CSS + JavaScript + Supabase)
-
+#Demo Apps akses disini : https://warungkuproject.netlify.app/
 Fitur: login kasir, katalog produk dengan pencarian dan kategori, keranjang, diskon,
 pembayaran tunai/QRIS/transfer dengan kembalian, stok berkurang otomatis,
 struk yang bisa dicetak (80 mm), riwayat transaksi dengan ringkasan penjualan,

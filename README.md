@@ -1,5 +1,5 @@
 # Aplikasi Kasir (HTML + CSS + JavaScript + Supabase)
-# Demo Apps akses disini : https://warungkuproject.netlify.app/
+## Demo Apps akses disini : https://warungkuproject.netlify.app/
 Dengan memasukan email: warungku@gmail.com dengan password: warungku123
 
 Fitur: login kasir, katalog produk dengan pencarian dan kategori, keranjang, diskon,

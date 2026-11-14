@@ -1,7 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { getFirestore, collection, getDocs, doc, setDoc, updateDoc, deleteDoc, writeBatch, serverTimestamp, query, orderBy, where } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
 
 /* ================== Util ================== */
 const cfg = window.APP_CONFIG || {};
@@ -39,8 +38,40 @@ function toast(message, type = 'ok') {
   setTimeout(() => el.remove(), type === 'error' ? 6000 : 3200);
 }
 
+/* Fungsi Kompresi Gambar ke Base64 agar bisa disimpan langsung di Firestore NoSQL (Tanpa Firebase Storage) */
+function compressImageToBase64(file, maxWidth = 400, quality = 0.75) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Hasilkan string data:image/jpeg;base64 yang sangat ringan (< 40KB)
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => reject(new Error('Gagal membaca file gambar.'));
+    };
+    reader.onerror = () => reject(new Error('Gagal memproses file gambar.'));
+  });
+}
+
 /* ================== State & Firebase Init ================== */
-let app, auth, db, storage;
+let app, auth, db;
 
 const state = {
   user: null,
@@ -75,7 +106,6 @@ async function init() {
   app = initializeApp(cfg.FIREBASE_CONFIG);
   auth = getAuth(app);
   db = getFirestore(app);
-  storage = getStorage(app);
 
   onAuthStateChanged(auth, (user) => {
     applySession(user);
@@ -311,12 +341,9 @@ async function saveProduct(e) {
   try {
     let imageUrl = state.editingId ? (state.products.find((x) => x.id === state.editingId)?.image_url || '') : '';
 
+    // Konversi file gambar ke Base64 ringan dan simpan langsung ke dokumen Firestore
     if (imageFile) {
-      const fileExt = imageFile.name.split('.').pop();
-      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
-      const imageRef = ref(storage, `products/${fileName}`);
-      await uploadBytes(imageRef, imageFile);
-      imageUrl = await getDownloadURL(imageRef);
+      imageUrl = await compressImageToBase64(imageFile);
     }
 
     const payload = { name, category, price, stock, image_url: imageUrl };
@@ -566,7 +593,6 @@ async function loadHistory() {
   if (end <= start) return toast('Tanggal akhir tidak boleh sebelum tanggal awal.', 'warn');
 
   try {
-    // Note: Query ini memerlukan Index di Firebase. Jika error saat di-run, cek Console/F12 browser untuk link auto-create Index.
     const q = query(
       collection(db, "transactions"),
       where("created_at", ">=", start),
@@ -606,7 +632,7 @@ async function loadHistory() {
 function openHistoryReceipt(id) {
   const t = (state.history || []).find((x) => x.id === id);
   if (!t) return;
-  showReceipt(t); // Data items sudah tertanam (NoSQL), tidak perlu di-map ulang
+  showReceipt(t);
 }
 
 /* ================== Keranjang di layar kecil ================== */
@@ -686,6 +712,20 @@ function bindEvents() {
   $('#btn-add-product').addEventListener('click', () => openProductDialog());
   $('#product-cancel').addEventListener('click', () => $('#product-dialog').close());
   $('#product-form').addEventListener('submit', saveProduct);
+
+  // Tampilkan preview otomatis saat user memilih file gambar
+  const imgInput = $('#p-image');
+  if (imgInput) {
+    imgInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      const preview = $('#p-image-preview');
+      if (file && preview) {
+        preview.src = await compressImageToBase64(file);
+        preview.classList.remove('hidden');
+      }
+    });
+  }
+
   $('#product-rows').addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-act]');
     if (!btn) return;
